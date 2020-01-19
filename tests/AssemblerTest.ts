@@ -134,4 +134,26 @@ describe('Assembler', () => {
         let mem: Uint32Array = a.ADD({dest: '$0', src1: '$1', src2: '$2'}).assemble();
         expect(mem).to.eql(Uint32Array.from([0x00220020]));
     });
+
+    describe('Real Examples', () => {
+        it('Can assemble factorial', () => {
+            const mem: Uint32Array = new Assembler({org: 0})
+                .label('factorial').begin()
+                        .LI({ dest: '$v0', imm32: 1 })
+                    .label('.next')
+                        .SLTI({ dest: '$v1', src: '$a0', imm16: 2 })
+                        .BNEZ({ src: '$v1', ref: {label: '.exit'} })
+                        .NOP()
+                        .MUL({ dest: '$v0', src1: '$v0', src2: '$a0' })
+                        .B({ ref: {label: '.next'} })
+                        .ADDIU({ dest: '$a0', src: '$a0', imm16: -1 })
+                    .label('.exit')
+                        .JR({ src: '$ra' })
+                        .NOP()
+                .end().assemble();
+            expect(mem).to.eql(Uint32Array.from([0x34020001,
+                0x28830002, 0x14600004, 0, 0x70441002, 0x1000fffb, 0x2484ffff,
+                0x03e00008, 0]));
+        });
+    });
 })

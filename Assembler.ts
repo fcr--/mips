@@ -122,15 +122,13 @@ class Assembler {
      * GPR[dest] ← GPR[src1] + GPR[src2], trapping on overflow.
      */
     public ADD({src1, src2, dest}: { dest: Assembler.LRegister, src1: Assembler.LRegister, src2: Assembler.LRegister }): this {
-        this.flags.inDelaySlot = false;
-        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, opcode: 0b100000});
+        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, funct: 0b100000});
     }
 
     /**
      * GPR[dest] ← GPR[src1] + sign_extend(imm), trapping on overflow.
      */
     public ADDI({src, dest, imm16}: { dest: Assembler.LRegister, src: Assembler.LRegister, imm16: Assembler.Numeric }): this {
-        this.flags.inDelaySlot = false;
         return this.pushIInstruction({opcode: 0b001000, rs: src, rt: dest, imm16});
     }
 
@@ -138,7 +136,6 @@ class Assembler {
      * GPR[dest] ← GPR[src1] + sign_extend(imm), without trap.
      */
     public ADDIU({src, dest, imm16}: { dest: Assembler.LRegister, src: Assembler.LRegister, imm16: Assembler.Numeric }): this {
-        this.flags.inDelaySlot = false;
         return this.pushIInstruction({opcode: 0b001001, rs: src, rt: dest, imm16});
     }
 
@@ -146,23 +143,20 @@ class Assembler {
      * GPR[dest] ← GPR[src1] + GPR[src2].
      */
     public ADDU({src1, src2, dest}: { dest: Assembler.LRegister, src1: Assembler.LRegister, src2: Assembler.LRegister }): this {
-        this.flags.inDelaySlot = false;
-        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, opcode: 0b100001});
+        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, funct: 0b100001});
     }
 
     /**
      * GPR[dest] ← GPR[src1] and GPR[src2].
      */
     public AND({src1, src2, dest}: { dest: Assembler.LRegister, src1: Assembler.LRegister, src2: Assembler.LRegister }): this {
-        this.flags.inDelaySlot = false;
-        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, opcode: 0b100100});
+        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, funct: 0b100100});
     }
 
     /**
      * GPR[dest] ← GPR[src] and zero_extend(imm).
      */
     public ANDI({src, dest, imm16}: { dest: Assembler.LRegister, src: Assembler.LRegister, imm16: Assembler.Numeric }): this {
-        this.flags.inDelaySlot = false;
         return this.pushIInstruction({opcode: 0b001100, rs: src, rt: dest, imm16});
     }
 
@@ -170,7 +164,7 @@ class Assembler {
      * Pseudo instruction: branch unconditionally.
      * Implemented as: BEQ $zero, $zero, ref
      */
-    public B(ref: Assembler.LLabelRef): this {
+    public B({ref}: { ref: Assembler.LLabelRef }): this {
         return this.forbiddenInDelaySlot('B')
             .BEQ({src1: Assembler.GPR[0], src2: Assembler.GPR[0], ref});
     }
@@ -257,20 +251,90 @@ class Assembler {
             .setInDelaySlot();
     }
 
-    // TODO: implement BLEZ instruction.
-    // TODO: implement BLEZL instruction.
-    // TODO: implement BLTZ instruction.
-    // TODO: implement BLTZAL instruction.
-    // TODO: implement BLTZALL instruction.
-    // TODO: implement BLTZL instruction.
-    // TODO: implement BNE instruction.
-    // TODO: implement BNEL instruction.
+    /**
+     * If GPR[src] <= 0 then relative branch.
+     */
+    public BLEZ({src, ref}: { src: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BLEZ')
+            .pushIInstruction({opcode: 0b000110, rs: src, rt: Assembler.GPR[0], imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src] <= 0 then relative branch, likely.
+     */
+    public BLEZL({src, ref}: { src: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BLEZL')
+            .pushIInstruction({opcode: 0b010110, rs: src, rt: Assembler.GPR[0], imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src] < 0 then relative branch.
+     */
+    public BLTZ({src, ref}: { src: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BLTZ')
+            .pushIInstruction({opcode: 0b000001, rs: src, rt: Assembler.GPR[0b00000], imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src] < 0 then relative branch and link.
+     */
+    public BLTZAL({src, ref}: { src: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BGLTAL')
+            .pushIInstruction({opcode: 0b000001, rs: src, rt: Assembler.GPR[0b10000], imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src] < 0 then relative branch and link, likely.
+     */
+    public BLTZALL({src, ref}: { src: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BGLTALL')
+            .pushIInstruction({opcode: 0b000001, rs: src, rt: Assembler.GPR[0b10010], imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src] < 0 then relative branch, likely.
+     */
+    public BLTZL({src, ref}: { src: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BLTZL')
+            .pushIInstruction({opcode: 0b000001, rs: src, rt: Assembler.GPR[0b00010], imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src1] != GPR[src2] then relative branch.
+     */
+    public BNE({src1, src2, ref}: { src1: Assembler.LRegister, src2: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BNE')
+            .pushIInstruction({opcode: 0b000101, rs: src1, rt: src2, imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src1] != GPR[src2] then relative branch, likely.
+     */
+    public BNEL({src1, src2, ref}: { src1: Assembler.LRegister, src2: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BNEL')
+            .pushIInstruction({opcode: 0b010101, rs: src1, rt: src2, imm16: this.labelRefMap(ref)})
+            .setInDelaySlot();
+    }
+
+    /**
+     * If GPR[src] != 0 then relative branch.
+     */
+    public BNEZ({src, ref}: { src: Assembler.LRegister, ref: Assembler.LLabelRef }): this {
+        return this.forbiddenInDelaySlot('BNEZ').BNE({src1: src, src2: '$zero', ref});
+    }
 
     /**
      * Cause a Breakpoint exception.
      */
     public BREAK({code}: { code: Assembler.Numeric } = {code: 0}): this {
-        return this.pushExceptionInstruction({code, opcode: 0b001101});
+        return this.pushExceptionInstruction({code, funct: 0b001101});
     }
 
     // TODO: implement CACHE instruction.
@@ -298,6 +362,12 @@ class Assembler {
     // TODO: implement JAL instruction.
     // TODO: implement JALR instruction.
     // TODO: implement JR instruction.
+    /**
+     * Jump to the address at the given register (usually $ra, which means doing a return).
+     */
+    public JR({src}: { src: Assembler.LRegister }): this {
+        return this.pushRInstruction({rs: src, funct: 0b001000});
+    }
 
     /**
      * Pseudo instruction: GPR[dest] ← imm32, same as LI.
@@ -362,16 +432,31 @@ class Assembler {
     // TODO: implement MTHI instruction.
     // TODO: implement MTLO instruction.
     // TODO: implement MUL instruction.
+
+    /**
+     * GPR[dest] ← GPR[src1] * GPR[src2].
+     */
+    public MUL({src1, src2, dest}: { dest: Assembler.LRegister, src1: Assembler.LRegister, src2: Assembler.LRegister }): this {
+        return this.pushRInstruction({opcode: 0b011100, rs: src1, rt: src2, rd: dest, funct: 0b000010});
+    }
+
     // TODO: implement MULT instruction.
     // TODO: implement MULTU instruction.
-    // TODO: implement NOP instruction.
+
+    /**
+     * Waste a CPU cycle doing (SLL $0, $0, 0) nothing.
+     */
+    public NOP(): this {
+        return this.pushData({ word: 0 });
+    }
+
     // TODO: implement NOR instruction.
 
     /**
      * GPR[dest] ← GPR[src1] or GPR[src2].
      */
     public OR({src1, src2, dest}: { dest: Assembler.LRegister, src1: Assembler.LRegister, src2: Assembler.LRegister }): this {
-        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, opcode: 0b100101});
+        return this.pushRInstruction({rs: src1, rt: src2, rd: dest, funct: 0b100101});
     }
 
     // TODO: implement ORI instruction.
@@ -385,7 +470,15 @@ class Assembler {
     // TODO: implement SLL instruction.
     // TODO: implement SLLV instruction.
     // TODO: implement SLT instruction.
-    // TODO: implement SLTI instruction.
+
+    /**
+     * GPR[dest] ← (GPR[src1] < sign_extend(imm)) ? 1 : 0.
+     * Overflows do not cause exceptions here.
+     */
+    public SLTI({src, dest, imm16}: { dest: Assembler.LRegister, src: Assembler.LRegister, imm16: Assembler.Numeric }): this {
+        return this.pushIInstruction({opcode: 0b001010, rs: src, rt: dest, imm16});
+    }
+
     // TODO: implement SLTIU instruction.
     // TODO: implement SLTU instruction.
     // TODO: implement SRA instruction.
@@ -528,13 +621,13 @@ class Assembler {
         }
     }
 
-    private pushInstruction<T>(format: Assembler.InstructionFormat<T>): (values: {[K in keyof T]: Assembler.OptLazy<T[K]>}) => this {
-        return (values: {[K in keyof T]: Assembler.OptLazy<T[K]>}): this => {
+    private pushInstruction<T>(format: Assembler.InstructionFormat<T>): (values: {[K in keyof T]?: Assembler.OptLazy<T[K]>}) => this {
+        return (values: {[K in keyof T]?: Assembler.OptLazy<T[K]>}): this => {
             const originalOrg = this.currentOrg;
             const index = this.instructions.length;
             let word = 0;
             Object.keys(format).forEach((key) => {
-                const unparsedValue: Assembler.OptLazy<T[keyof T]> = values[key as keyof T]
+                const unparsedValue: Assembler.OptLazy<T[keyof T]> | undefined = values[key as keyof T]
                 if (typeof unparsedValue === 'function') {
                     this.secondStageTasks.push(() => {
                         this.instructions[index] = format[key as keyof T]({
@@ -546,7 +639,7 @@ class Assembler {
                             org: originalOrg,
                         });
                     });
-                } else {
+                } else if (typeof unparsedValue !== 'undefined') {
                     word = format[key as keyof T]({
                         unparsedValue,
                         instr: word,
@@ -569,14 +662,16 @@ class Assembler {
         imm16: Assembler.immediateFormat({name: 'imm16', pos: 0, bits: 16}),
     });
     private pushRInstruction = this.pushInstruction({
+        opcode: Assembler.fixedIntFormat({pos: 26, bits: 6}),
         rs: Assembler.registerFormat('src1', 21),
         rt: Assembler.registerFormat('src2', 16),
         rd: Assembler.registerFormat('dest', 11),
-        opcode: Assembler.fixedIntFormat({pos: 0, bits: 6}),
+        funct: Assembler.fixedIntFormat({pos: 0, bits: 6}),
     });
     private pushExceptionInstruction = this.pushInstruction({
+        opcode: Assembler.fixedIntFormat({pos: 26, bits: 6}),
         code: Assembler.immediateFormat({name: 'code', pos: 6, bits: 20}),
-        opcode: Assembler.fixedIntFormat({pos: 0, bits: 6}),
+        funct: Assembler.fixedIntFormat({pos: 0, bits: 6}),
     });
     private pushData = this.pushInstruction({
         word: Assembler.immediateFormat({name: 'word', pos: 0, bits: 32})
