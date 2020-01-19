@@ -400,8 +400,10 @@ class Assembler {
             const index = this.instructions.length;
             this.instructions.push(0, 0); // NOP; NOP
             this.currentOrg += 8;
+            // we want to use the defined labels dict at the current point
+            const definedLabels = this.definedLabels;
             this.secondStageTasks.push(() => {
-                this.instructions.splice(index, 2, ... Assembler.liEncode(dest, originalOrg, immfunc(this.definedLabels), true));
+                this.instructions.splice(index, 2, ... Assembler.liEncode(dest, originalOrg, immfunc(definedLabels), true));
             });
         }
         return this.setInDelaySlot(false);
@@ -538,14 +540,20 @@ class Assembler {
         lref: Assembler.LLabelRef,
         {relative}: { relative: 'words-from-next' | 'bytes-from-next' | 'bytes-from-current' | false }={relative: 'words-from-next'}
     ): Assembler.Numeric {
-        let rel = 0, shift = 0;
-        switch (relative) {
-            case 'bytes-from-current': rel = this.currentOrg;     shift = 0; break;
-            case 'bytes-from-next':    rel = this.currentOrg + 4; shift = 0; break;
-            case 'words-from-next':    rel = this.currentOrg + 4; shift = 2; break;
-        }
+        const currentOrg = this.currentOrg;
         return Assembler.bindOptLazy((ref: Assembler.LabelRef): Assembler.Numeric => {
-            const fn = (labels: {[labelName: string]: number}) => ( labels[ref.label] + ((ref.offset || 0) | 0) - rel ) >> shift;
+            const fn = (labels: {[labelName: string]: number}) => {
+                let rel = 0, shift = 0;
+                switch (relative) {
+                    case 'bytes-from-current': rel = currentOrg;     shift = 0; break;
+                    case 'bytes-from-next':    rel = currentOrg + 4; shift = 0; break;
+                    case 'words-from-next':    rel = currentOrg + 4; shift = 2; break;
+                }
+                if (typeof labels[ref.label] === 'undefined') {
+                    throw new Error(`Undefined label referenced at instruction ${currentOrg}`);
+                }
+                return ( labels[ref.label] + ((ref.offset || 0) | 0) - rel ) >> shift;
+            }
             return this.definedLabels[ref.label] ? fn(this.definedLabels) : fn;
         }, lref);
     }
@@ -629,10 +637,12 @@ class Assembler {
             Object.keys(format).forEach((key) => {
                 const unparsedValue: Assembler.OptLazy<T[keyof T]> | undefined = values[key as keyof T]
                 if (typeof unparsedValue === 'function') {
+                    // we want to use the definedLabels at this point in time
+                    const definedLabels = this.definedLabels;
                     this.secondStageTasks.push(() => {
                         this.instructions[index] = format[key as keyof T]({
                             // typescript doesn't realize that:  (X extends Y ? never : X) & Y  :=:  never.
-                            unparsedValue: (unparsedValue as Assembler.LazyCallback<T[keyof T]>)(this.definedLabels),
+                            unparsedValue: (unparsedValue as Assembler.LazyCallback<T[keyof T]>)(definedLabels),
                             instr: this.instructions[index],
                             key,
                             assembler: this,
